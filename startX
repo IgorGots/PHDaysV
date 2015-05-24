@@ -1,0 +1,77 @@
+#!/bin/bash
+#Kibana and Marvel host
+HOST="elk"
+MARVEL=0
+TIMEOUT=60
+DEBUG=0
+#First URL - Marvel URL
+URL="http://$HOST:9200/_plugin/marvel/kibana/index.html#/dashboard/file/marvel.overview.json"
+
+
+#Kill everything
+killall iceweasel
+killall Xorg
+#wait a moment
+sleep 3
+#start new Xorg
+Xorg :1 &
+#prepare DISPLAY variable for output
+export DISPLAY=:1
+#wait Xorg startup
+sleep 1
+#disable screensaver
+xset s off
+#disable power management for monitor
+xset -dpms
+
+#forever change dashboards
+while true; do 
+
+    if [[ -z `pidof iceweasel` ]]; then
+	test $DEBUG -eq "1" && echo "iceweasel restarted"
+	#start browser 
+	iceweasel -width 1920 -height 1080 --display=:1 &
+	sleep 3
+    fi
+
+    if [[ $MARVEL = "1" ]]; then
+	xdotool key "CTRL+l"
+	xdotool type $URL
+	test $DEBUG -eq "1" && echo $URL
+	xdotool key Return
+	#if Marvel show agreement - accept
+	xdotool mousemove 1100 250
+	xdotool click 1
+	sleep 5
+	#if Marvel show form for developer - skip
+	xdotool mousemove 1000 450
+	xdotool click 1
+	sleep 5
+	#fullscreen for browser
+	xdotool key F11
+	sleep $TIMEOUT
+    fi
+
+    URL=""
+    #get dashboards list from Kibana
+    _URL=$(curl -s -XGET "http://$HOST:9200/kibana-int/dashboard/_search?fields=title" | grep -Po '"title":.*?[^\\\\]"\]\}' | sed 's/.*\["//' | sed 's/"\].*//' | sed 's/ /%20/g')
+    #Prepare list of URL
+    for i in $_URL; do
+	URL="http://$HOST/kibana/#/dashboard/elasticsearch/$i $URL";
+    done
+
+    test $DEBUG -eq "1" && echo $URL
+
+    for i in $URL; do
+	xdotool key "CTRL+l"
+	xdotool type $i
+	xdotool key "Delete"
+	sleep 1
+	test $DEBUG -eq "1" && echo $i
+	xdotool key Return
+	sleep 1
+	xdotool key F11
+	sleep $TIMEOUT
+	xdotool key F11
+    done
+done
